@@ -36,33 +36,62 @@ function App() {
   }, [query])
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-6 py-10">
+    <div className="min-h-screen bg-slate-900 text-slate-100">
 
-        <div className="mb-8">
-          <p className="text-sm font-medium tracking-widest text-blue-600 uppercase mb-1">
-            Single-nucleus eQTL atlas
-          </p>
-          <h1 className="text-3xl font-bold text-gray-900">
-            eQTL Browser
-          </h1>
+      {/* Header bar */}
+      <header className="border-b border-slate-700 bg-slate-800 px-6 py-4">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-emerald-400 uppercase mb-1">
+              Ensembl REST API
+            </p>
+            <h1 className="text-2xl font-bold text-white">
+              Gene Browser
+            </h1>
+          </div>
+          <span className="text-xs text-slate-400 font-mono">
+            Homo sapiens · GRCh38
+          </span>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-4xl mx-auto px-6 py-8">
+
+        {/* Search */}
+        <div className="mb-6">
+          <SearchBar query={query} onChange={setQuery} />
         </div>
 
-        <SearchBar query={query} onChange={setQuery} />
-
-        <div className="mt-6">
-          {loading && (
-            <p className="text-sm text-gray-500">Loading...</p>
+        {/* Status strip */}
+        <div className="mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
+          {gene && (
+            <>
+              <span className="text-emerald-400">●</span>
+              <span>1 result</span>
+              <span className="text-slate-600">·</span>
+              <span>{gene.assembly_name}</span>
+              <span className="text-slate-600">·</span>
+              <span>chr{gene.seq_region_name}:{gene.start?.toLocaleString()}–{gene.end?.toLocaleString()}</span>
+            </>
           )}
-          {error && (
-            <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
+          {!gene && !loading && !error && (
+            <span>Enter a gene symbol to search</span>
           )}
-          {gene && <GeneTable gene={gene} />}
         </div>
 
-      </div>
+        {/* States */}
+        {loading && (
+          <p className="text-sm text-slate-400 font-mono">Fetching...</p>
+        )}
+        {error && (
+          <div className="rounded-md bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+        {gene && <GeneTable gene={gene} />}
+
+      </main>
     </div>
   )
 }
