@@ -60,7 +60,13 @@ function App() {
 
         {/* Search */}
         <div className="mb-6">
-          <SearchBar query={query} onChange={setQuery} />
+          <SearchBar
+            query={query}
+            onChange={setQuery}
+            loading={loading}
+            error={error}
+            gene={gene}
+          />
         </div>
 
         {/* Status strip */}
