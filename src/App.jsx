@@ -1,12 +1,25 @@
 import { useState, useEffect } from 'react'
 import SearchBar from './SearchBar'
 import GeneTable from './GeneTable'
+import Controls from './Controls'
 
 function App() {
   const [query, setQuery]     = useState('')
   const [gene, setGene]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  const [species, setSpecies] = useState('homo_sapiens')
+  const [build, setBuild]     = useState('GRCh38')
+
+  const apiBase = build === 'GRCh37'
+    ? 'https://grch37.rest.ensembl.org'
+    : 'https://rest.ensembl.org'
+
+  function handleSpecies(s) {
+    setSpecies(s)
+    setGene(null)
+    setBuild('GRCh38')
+  }
 
   useEffect(() => {
     if (!query) {
@@ -19,7 +32,7 @@ function App() {
       setError(null)
       try {
         const res = await fetch(
-          `https://rest.ensembl.org/lookup/symbol/homo_sapiens/${query}?content-type=application/json`
+          `${apiBase}/lookup/symbol/${species}/${query}?content-type=application/json`
         )
         if (!res.ok) throw new Error('Gene not found')
         const data = await res.json()
@@ -33,12 +46,13 @@ function App() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, species, build])
+
+  const buildLabel = species === 'homo_sapiens' ? build : 'GRCm39'
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
 
-      {/* Header bar */}
       <header className="border-b border-slate-700 bg-slate-800 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
@@ -46,37 +60,39 @@ function App() {
               Ensembl REST API
             </p>
             <h1 className="text-2xl font-bold text-white">
-              Gene Browser
+              Ensembl Gene Browser
             </h1>
           </div>
           <span className="text-xs text-slate-400 font-mono">
-            Homo sapiens · GRCh38
+            {species === 'homo_sapiens' ? 'Homo sapiens' : 'Mus musculus'} · {buildLabel}
           </span>
         </div>
       </header>
 
-      {/* Main content */}
       <main className="max-w-4xl mx-auto px-6 py-8">
 
-        {/* Search */}
-        <div className="mb-6">
-          <SearchBar
-            query={query}
-            onChange={setQuery}
-            loading={loading}
-            error={error}
-            gene={gene}
-          />
-        </div>
+        <SearchBar
+          query={query}
+          onChange={setQuery}
+          loading={loading}
+          error={error}
+          gene={gene}
+        />
 
-        {/* Status strip */}
-        <div className="mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
+        <Controls
+          species={species}
+          onSpecies={handleSpecies}
+          build={build}
+          onBuild={setBuild}
+        />
+
+        <div className="mt-6 mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
           {gene && (
             <>
               <span className="text-emerald-400">●</span>
               <span>1 result</span>
               <span className="text-slate-600">·</span>
-              <span>{gene.assembly_name}</span>
+              <span>{buildLabel}</span>
               <span className="text-slate-600">·</span>
               <span>chr{gene.seq_region_name}:{gene.start?.toLocaleString()}–{gene.end?.toLocaleString()}</span>
             </>
@@ -86,7 +102,6 @@ function App() {
           )}
         </div>
 
-        {/* States */}
         {loading && (
           <p className="text-sm text-slate-400 font-mono">Fetching...</p>
         )}
