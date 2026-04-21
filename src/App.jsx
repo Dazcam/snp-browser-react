@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import SearchBar from './SearchBar'
+import SearchTabs from './SearchTabs'
+import BatchSearch from './BatchSearch'
 import GeneTable from './GeneTable'
 import Controls from './Controls'
 
 function App() {
-  const [query, setQuery]     = useState('')
-  const [gene, setGene]       = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState(null)
-  const [species, setSpecies] = useState('homo_sapiens')
-  const [build, setBuild]     = useState('GRCh38')
+  const [query, setQuery]       = useState('')
+  const [genes, setGenes]       = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState(null)
+  const [species, setSpecies]   = useState('homo_sapiens')
+  const [build, setBuild]       = useState('GRCh38')
+  const [activeTab, setActiveTab] = useState('single')
 
   const apiBase = build === 'GRCh37'
     ? 'https://grch37.rest.ensembl.org'
@@ -17,29 +20,58 @@ function App() {
 
   function handleSpecies(s) {
     setSpecies(s)
-    setGene(null)
+    setGenes([])
     setBuild('GRCh38')
   }
 
-  useEffect(() => {
-    if (!query) {
-      setGene(null)
-      return
+  function removeGene(id) {
+    setGenes(prev => prev.filter(g => g.id !== id))
+  }
+
+  async function fetchGene(symbol) {
+    const res = await fetch(
+      `${apiBase}/lookup/symbol/${species}/${symbol}?content-type=application/json`
+    )
+    if (!res.ok) throw new Error(`"${symbol}" not found`)
+    return res.json()
+  }
+
+  async function handleBatchFetch(symbols) {
+    setLoading(true)
+    setError(null)
+    const errors = []
+
+    for (const symbol of symbols) {
+      try {
+        const data = await fetchGene(symbol)
+        setGenes(prev => {
+          if (prev.find(g => g.id === data.id)) return prev
+          return [...prev, data]
+        })
+      } catch (err) {
+        errors.push(err.message)
+      }
     }
+
+    if (errors.length > 0) setError(errors.join(' · '))
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    if (!query) return
 
     const timer = setTimeout(async () => {
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(
-          `${apiBase}/lookup/symbol/${species}/${query}?content-type=application/json`
-        )
-        if (!res.ok) throw new Error('Gene not found')
-        const data = await res.json()
-        setGene(data)
+        const data = await fetchGene(query)
+        setGenes(prev => {
+          if (prev.find(g => g.id === data.id)) return prev
+          return [...prev, data]
+        })
+        setQuery('')
       } catch (err) {
         setError(err.message)
-        setGene(null)
       } finally {
         setLoading(false)
       }
@@ -71,13 +103,19 @@ function App() {
 
       <main className="max-w-4xl mx-auto px-6 py-8">
 
-        <SearchBar
-          query={query}
-          onChange={setQuery}
-          loading={loading}
-          error={error}
-          gene={gene}
-        />
+        <SearchTabs activeTab={activeTab} onTab={setActiveTab} />
+
+        {activeTab === 'single' ? (
+          <SearchBar
+            query={query}
+            onChange={setQuery}
+            loading={loading}
+            error={error}
+            gene={genes.length > 0}
+          />
+        ) : (
+          <BatchSearch onFetch={handleBatchFetch} loading={loading} />
+        )}
 
         <Controls
           species={species}
@@ -87,30 +125,36 @@ function App() {
         />
 
         <div className="mt-6 mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
-          {gene && (
+          {genes.length > 0 && (
             <>
               <span className="text-emerald-400">●</span>
-              <span>1 result</span>
+              <span>{genes.length} gene{genes.length > 1 ? 's' : ''}</span>
               <span className="text-slate-600">·</span>
               <span>{buildLabel}</span>
-              <span className="text-slate-600">·</span>
-              <span>chr{gene.seq_region_name}:{gene.start?.toLocaleString()}–{gene.end?.toLocaleString()}</span>
             </>
           )}
-          {!gene && !loading && !error && (
+          {genes.length === 0 && !loading && !error && (
             <span>Enter a gene symbol to search</span>
+          )}
+          {genes.length > 0 && (
+            <button
+              onClick={() => setGenes([])}
+              className="ml-auto text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
+            >
+              Clear all
+            </button>
           )}
         </div>
 
-        {loading && (
-          <p className="text-sm text-slate-400 font-mono">Fetching...</p>
-        )}
         {error && (
-          <div className="rounded-md bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-400">
+          <div className="rounded-md bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-400 mb-4">
             {error}
           </div>
         )}
-        {gene && <GeneTable gene={gene} />}
+
+        {genes.length > 0 && (
+          <GeneTable genes={genes} onRemove={removeGene} />
+        )}
 
       </main>
     </div>
