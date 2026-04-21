@@ -131,6 +131,14 @@ function App() {
               <span>{genes.length} gene{genes.length > 1 ? 's' : ''}</span>
               <span className="text-slate-600">·</span>
               <span>{buildLabel}</span>
+              {genes.length === 1 && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span>chr{genes[0].seq_region_name}:{genes[0].start?.toLocaleString()}–{genes[0].end?.toLocaleString()}</span>
+                  <span className="text-slate-600">·</span>
+                  <span>{Math.round((genes[0].end - genes[0].start) / 1000)}kb</span>
+                </>
+              )}
             </>
           )}
           {genes.length === 0 && !loading && !error && (

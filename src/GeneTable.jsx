@@ -18,11 +18,20 @@ function GeneTable({ genes, onRemove }) {
           {genes.map(gene => (
             <tr key={gene.id} className="bg-slate-900 hover:bg-slate-800 transition-colors">
               <td className="px-4 py-3 font-semibold text-white">{gene.display_name}</td>
-              <td className="px-4 py-3 font-mono text-xs text-emerald-400">{gene.id}</td>
+              <td className="px-4 py-3 font-mono text-xs">
+                <a
+                  href={"https://www.ensembl.org/id/" + gene.id}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-emerald-400 hover:text-emerald-300 hover:underline transition-colors"
+                >
+                  {gene.id}
+                </a>
+              </td>
               <td className="px-4 py-3 text-slate-300">{gene.seq_region_name}</td>
               <td className="px-4 py-3 text-slate-300">{gene.start?.toLocaleString()}</td>
               <td className="px-4 py-3 text-slate-300">{gene.end?.toLocaleString()}</td>
-              <td className="px-4 py-3 text-slate-300">{gene.strand === 1 ? '+' : '−'}</td>
+              <td className="px-4 py-3 text-slate-300">{gene.strand === 1 ? '+' : '-'}</td>
               <td className="px-4 py-3">
                 <span className="rounded-full bg-emerald-900/40 px-2 py-1 text-xs font-medium text-emerald-400 border border-emerald-800">
                   {gene.biotype}
@@ -33,7 +42,7 @@ function GeneTable({ genes, onRemove }) {
                   onClick={() => onRemove(gene.id)}
                   className="text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
                 >
-                  ✕
+                  x
                 </button>
               </td>
             </tr>
