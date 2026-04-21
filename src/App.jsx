@@ -82,6 +82,29 @@ function App() {
 
   const buildLabel = species === 'homo_sapiens' ? build : 'GRCm39'
 
+  function exportTSV() {
+    const headers = ['symbol', 'ensembl_id', 'chromosome', 'start', 'end', 'strand', 'biotype', 'assembly']
+    const rows = genes.map(g => [
+      g.display_name,
+      g.id,
+      g.seq_region_name,
+      g.start,
+      g.end,
+      g.strand === 1 ? '+' : '-',
+      g.biotype,
+      g.assembly_name
+    ].join('\t'))
+
+    const tsv = [headers.join('\t'), ...rows].join('\n')
+    const blob = new Blob([tsv], { type: 'text/tab-separated-values' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `gene_browser_${species}_${buildLabel}_${new Date().toISOString().slice(0, 10)}.tsv`
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
 
@@ -145,12 +168,20 @@ function App() {
             <span>Enter a gene symbol to search</span>
           )}
           {genes.length > 0 && (
-            <button
-              onClick={() => setGenes([])}
-              className="ml-auto text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
-            >
-              Clear all
-            </button>
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                onClick={exportTSV}
+                className="text-slate-500 hover:text-emerald-400 transition-colors text-xs font-mono"
+              >
+                Export TSV
+              </button>
+              <button
+                onClick={() => setGenes([])}
+                className="text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
+              >
+                Clear all
+              </button>
+            </div>
           )}
         </div>
 
