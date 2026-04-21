@@ -4,15 +4,17 @@ import SearchTabs from './SearchTabs'
 import BatchSearch from './BatchSearch'
 import GeneTable from './GeneTable'
 import Controls from './Controls'
+import SNPBrowser from './SNPBrowser'
 
 function App() {
-  const [query, setQuery]       = useState('')
-  const [genes, setGenes]       = useState([])
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState(null)
-  const [species, setSpecies]   = useState('homo_sapiens')
-  const [build, setBuild]       = useState('GRCh38')
+  const [query, setQuery]         = useState('')
+  const [genes, setGenes]         = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [error, setError]         = useState(null)
+  const [species, setSpecies]     = useState('homo_sapiens')
+  const [build, setBuild]         = useState('GRCh38')
   const [activeTab, setActiveTab] = useState('single')
+  const [appTab, setAppTab]       = useState('genes')
 
   const apiBase = build === 'GRCh37'
     ? 'https://grch37.rest.ensembl.org'
@@ -40,7 +42,6 @@ function App() {
     setLoading(true)
     setError(null)
     const errors = []
-
     for (const symbol of symbols) {
       try {
         const data = await fetchGene(symbol)
@@ -52,14 +53,12 @@ function App() {
         errors.push(err.message)
       }
     }
-
     if (errors.length > 0) setError(errors.join(' · '))
     setLoading(false)
   }
 
   useEffect(() => {
     if (!query) return
-
     const timer = setTimeout(async () => {
       setLoading(true)
       setError(null)
@@ -76,7 +75,6 @@ function App() {
         setLoading(false)
       }
     }, 500)
-
     return () => clearTimeout(timer)
   }, [query, species, build])
 
@@ -94,7 +92,6 @@ function App() {
       g.biotype,
       g.assembly_name
     ].join('\t'))
-
     const tsv = [headers.join('\t'), ...rows].join('\n')
     const blob = new Blob([tsv], { type: 'text/tab-separated-values' })
     const url = URL.createObjectURL(blob)
@@ -103,7 +100,7 @@ function App() {
     a.download = `gene_browser_${species}_${buildLabel}_${new Date().toISOString().slice(0, 10)}.tsv`
     a.click()
     URL.revokeObjectURL(url)
-}
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -122,77 +119,109 @@ function App() {
             {species === 'homo_sapiens' ? 'Homo sapiens' : 'Mus musculus'} · {buildLabel}
           </span>
         </div>
+
+        <div className="max-w-4xl mx-auto mt-4 flex gap-1">
+          {['genes', 'snps'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setAppTab(tab)}
+              className={`px-4 py-1.5 rounded-md text-xs font-mono transition-colors duration-150 ${
+                appTab === tab
+                  ? 'bg-slate-700 text-slate-100'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {tab === 'genes' ? 'Gene Browser' : 'SNP Browser'}
+            </button>
+          ))}
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
 
-        <SearchTabs activeTab={activeTab} onTab={setActiveTab} />
+        {appTab === 'genes' ? (
+          <>
+            <SearchTabs activeTab={activeTab} onTab={setActiveTab} />
 
-        {activeTab === 'single' ? (
-          <SearchBar
-            query={query}
-            onChange={setQuery}
-            loading={loading}
-            error={error}
-            gene={genes.length > 0}
-          />
-        ) : (
-          <BatchSearch onFetch={handleBatchFetch} loading={loading} />
-        )}
+            {activeTab === 'single' ? (
+              <SearchBar
+                query={query}
+                onChange={setQuery}
+                loading={loading}
+                error={error}
+                gene={genes.length > 0}
+              />
+            ) : (
+              <BatchSearch onFetch={handleBatchFetch} loading={loading} />
+            )}
 
-        <Controls
-          species={species}
-          onSpecies={handleSpecies}
-          build={build}
-          onBuild={setBuild}
-        />
+            <Controls
+              species={species}
+              onSpecies={handleSpecies}
+              build={build}
+              onBuild={setBuild}
+            />
 
-        <div className="mt-6 mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
-          {genes.length > 0 && (
-            <>
-              <span className="text-emerald-400">●</span>
-              <span>{genes.length} gene{genes.length > 1 ? 's' : ''}</span>
-              <span className="text-slate-600">·</span>
-              <span>{buildLabel}</span>
-              {genes.length === 1 && (
+            <div className="mt-6 mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
+              {genes.length > 0 && (
                 <>
+                  <span className="text-emerald-400">●</span>
+                  <span>{genes.length} gene{genes.length > 1 ? 's' : ''}</span>
                   <span className="text-slate-600">·</span>
-                  <span>chr{genes[0].seq_region_name}:{genes[0].start?.toLocaleString()}–{genes[0].end?.toLocaleString()}</span>
-                  <span className="text-slate-600">·</span>
-                  <span>{Math.round((genes[0].end - genes[0].start) / 1000)}kb</span>
+                  <span>{buildLabel}</span>
+                  {genes.length === 1 && (
+                    <>
+                      <span className="text-slate-600">·</span>
+                      <span>chr{genes[0].seq_region_name}:{genes[0].start?.toLocaleString()}–{genes[0].end?.toLocaleString()}</span>
+                      <span className="text-slate-600">·</span>
+                      <span>{Math.round((genes[0].end - genes[0].start) / 1000)}kb</span>
+                    </>
+                  )}
                 </>
               )}
-            </>
-          )}
-          {genes.length === 0 && !loading && !error && (
-            <span>Enter a gene symbol to search</span>
-          )}
-          {genes.length > 0 && (
-            <div className="ml-auto flex items-center gap-3">
-              <button
-                onClick={exportTSV}
-                className="text-slate-500 hover:text-emerald-400 transition-colors text-xs font-mono"
-              >
-                Export TSV
-              </button>
-              <button
-                onClick={() => setGenes([])}
-                className="text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
-              >
-                Clear all
-              </button>
+              {genes.length === 0 && !loading && !error && (
+                <span>Enter a gene symbol to search</span>
+              )}
+              {genes.length > 0 && (
+                <div className="ml-auto flex items-center gap-3">
+                  <button
+                    onClick={exportTSV}
+                    className="text-slate-500 hover:text-emerald-400 transition-colors text-xs font-mono"
+                  >
+                    Export TSV
+                  </button>
+                  <button
+                    onClick={() => setGenes([])}
+                    className="text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {error && (
-          <div className="rounded-md bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-400 mb-4">
-            {error}
-          </div>
-        )}
+            {error && (
+              <div className="rounded-md bg-red-900/30 border border-red-700 px-4 py-3 text-sm text-red-400 mb-4">
+                {error}
+              </div>
+            )}
 
-        {genes.length > 0 && (
-          <GeneTable genes={genes} onRemove={removeGene} />
+            {genes.length > 0 && (
+              <GeneTable genes={genes} onRemove={removeGene} />
+            )}
+          </>
+        ) : (
+          <>
+            <Controls
+              species={species}
+              onSpecies={handleSpecies}
+              build={build}
+              onBuild={setBuild}
+            />
+            <div className="mt-4">
+              <SNPBrowser species={species} />
+            </div>
+          </>
         )}
 
       </main>
