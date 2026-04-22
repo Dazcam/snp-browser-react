@@ -1,10 +1,10 @@
 import { useState } from 'react'
 
 function SNPBrowser({ species }) {
-  const [query, setQuery]   = useState('')
-  const [snps, setSnps]     = useState([])
+  const [query, setQuery]     = useState('')
+  const [snps, setSnps]       = useState([])
   const [loading, setLoading] = useState(false)
-  const [error, setError]   = useState(null)
+  const [error, setError]     = useState(null)
 
   async function fetchSNP(rsid) {
     const res = await fetch(
@@ -12,6 +12,23 @@ function SNPBrowser({ species }) {
     )
     if (!res.ok) throw new Error(`"${rsid}" not found`)
     return res.json()
+  }
+
+  async function fetchSNPBatch(rsids) {
+    const res = await fetch(
+      `https://rest.ensembl.org/variation/${species}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ ids: rsids })
+      }
+    )
+    if (!res.ok) throw new Error('Batch request failed')
+    const data = await res.json()
+    return Object.entries(data).map(([name, info]) => ({ ...info, name }))
   }
 
   async function handleSearch(e) {
@@ -42,29 +59,48 @@ function SNPBrowser({ species }) {
     if (!rsids.length) return
     setLoading(true)
     setError(null)
-    const errors = []
-    for (const rsid of rsids) {
-      try {
-        const data = await fetchSNP(rsid)
-        setSnps(prev => {
-          if (prev.find(s => s.name === data.name)) return prev
-          return [...prev, data]
-        })
-      } catch (err) {
-        errors.push(err.message)
-      }
+    try {
+      const results = await fetchSNPBatch(rsids)
+      setSnps(prev => {
+        const existing = new Set(prev.map(s => s.name))
+        const newOnes = results.filter(r => !existing.has(r.name))
+        return [...prev, ...newOnes]
+      })
+      setQuery('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
-    if (errors.length) setError(errors.join(' · '))
-    setQuery('')
-    setLoading(false)
   }
 
   function removeSNP(name) {
     setSnps(prev => prev.filter(s => s.name !== name))
   }
 
+  function getLocation(snp) {
+    if (!snp.most_severe_consequence) return '—'
+    const c = snp.most_severe_consequence
+    if (c.includes('intron'))      return 'intronic'
+    if (c.includes('missense'))    return 'exonic'
+    if (c.includes('synonymous'))  return 'exonic'
+    if (c.includes('UTR'))         return 'UTR'
+    if (c.includes('upstream'))    return 'upstream'
+    if (c.includes('downstream'))  return 'downstream'
+    if (c.includes('intergenic'))  return 'intergenic'
+    return c.replace(/_/g, ' ')
+  }
+
+  function getLocationColour(location) {
+    if (location === 'exonic')                                return 'bg-emerald-900/40 text-emerald-400 border-emerald-800'
+    if (location === 'intronic')                              return 'bg-slate-700/60 text-slate-300 border-slate-600'
+    if (location === 'UTR')                                   return 'bg-blue-900/40 text-blue-400 border-blue-800'
+    if (location === 'upstream' || location === 'downstream') return 'bg-amber-900/40 text-amber-400 border-amber-800'
+    return 'bg-slate-700/60 text-slate-300 border-slate-600'
+  }
+
   function exportTSV() {
-    const headers = ['rsid', 'class', 'chromosome', 'position', 'alleles', 'ancestral', 'consequence', 'clinical_significance', 'evidence']
+    const headers = ['rsid', 'class', 'chromosome', 'position', 'alleles', 'ancestral', 'minor_allele', 'MAF', 'location', 'evidence']
     const rows = snps.map(s => {
       const m = s.mappings?.[0] || {}
       return [
@@ -74,8 +110,9 @@ function SNPBrowser({ species }) {
         m.start,
         m.allele_string,
         m.ancestral_allele,
-        s.most_severe_consequence,
-        (s.clinical_significance || []).join(';'),
+        s.minor_allele || '—',
+        s.MAF !== null && s.MAF !== undefined ? s.MAF.toFixed(3) : '—',
+        getLocation(s),
         (s.evidence || []).join(';')
       ].join('\t')
     })
@@ -93,7 +130,6 @@ function SNPBrowser({ species }) {
 
   return (
     <div>
-      {/* Search */}
       <form onSubmit={handleSearch} className="flex gap-2 mb-3">
         <input
           type="text"
@@ -119,7 +155,6 @@ function SNPBrowser({ species }) {
         </button>
       </form>
 
-      {/* Status strip */}
       <div className="mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
         {snps.length > 0 && (
           <>
@@ -162,12 +197,11 @@ function SNPBrowser({ species }) {
         </div>
       )}
 
-      {/* Table */}
       {snps.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-slate-700">
           <table className="w-full text-sm">
             <thead>
-            <tr className="border-b border-slate-700 bg-slate-800 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <tr className="border-b border-slate-700 bg-slate-800 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                 <th className="px-4 py-3">rsID</th>
                 <th className="px-4 py-3">Class</th>
                 <th className="px-4 py-3">Chr</th>
@@ -178,40 +212,24 @@ function SNPBrowser({ species }) {
                 <th className="px-4 py-3">MAF</th>
                 <th className="px-4 py-3">Location</th>
                 <th className="px-4 py-3"></th>
-            </tr>
+              </tr>
             </thead>
             <tbody>
-            {snps.map(snp => {
+              {snps.map(snp => {
                 const m = snp.mappings?.[0] || {}
-
-                const location = snp.most_severe_consequence
-                ? snp.most_severe_consequence.includes('intron')    ? 'intronic'
-                : snp.most_severe_consequence.includes('missense')  ? 'exonic'
-                : snp.most_severe_consequence.includes('synonymous')? 'exonic'
-                : snp.most_severe_consequence.includes('UTR')       ? 'UTR'
-                : snp.most_severe_consequence.includes('upstream')  ? 'upstream'
-                : snp.most_severe_consequence.includes('downstream')? 'downstream'
-                : snp.most_severe_consequence.includes('intergenic')? 'intergenic'
-                : snp.most_severe_consequence.replace(/_/g, ' ')
-                : '—'
-
-                const locationColour = location === 'exonic'     ? 'bg-emerald-900/40 text-emerald-400 border-emerald-800'
-                : location === 'intronic'   ? 'bg-slate-700/60 text-slate-300 border-slate-600'
-                : location === 'UTR'        ? 'bg-blue-900/40 text-blue-400 border-blue-800'
-                : location === 'upstream' || location === 'downstream' ? 'bg-amber-900/40 text-amber-400 border-amber-800'
-                : 'bg-slate-700/60 text-slate-300 border-slate-600'
-
+                const location = getLocation(snp)
+                const locationColour = getLocationColour(location)
                 return (
-                <tr key={snp.name} className="bg-slate-900 hover:bg-slate-800 transition-colors">
+                  <tr key={snp.name} className="bg-slate-900 hover:bg-slate-800 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs">
-                    <a
+                      <a
                         href={"https://www.ensembl.org/id/" + snp.name}
                         target="_blank"
                         rel="noreferrer"
                         className="text-emerald-400 hover:text-emerald-300 hover:underline transition-colors"
-                    >
+                      >
                         {snp.name}
-                    </a>
+                      </a>
                     </td>
                     <td className="px-4 py-3 text-slate-300">{snp.var_class}</td>
                     <td className="px-4 py-3 text-slate-300">{m.seq_region_name}</td>
@@ -220,26 +238,24 @@ function SNPBrowser({ species }) {
                     <td className="px-4 py-3 text-slate-300">{m.ancestral_allele}</td>
                     <td className="px-4 py-3 text-slate-300">{snp.minor_allele || '—'}</td>
                     <td className="px-4 py-3 text-slate-300">
-                    {snp.MAF !== null && snp.MAF !== undefined
-                        ? snp.MAF.toFixed(3)
-                        : '—'}
+                      {snp.MAF !== null && snp.MAF !== undefined ? snp.MAF.toFixed(3) : '—'}
                     </td>
                     <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium border whitespace-nowrap ${locationColour}`}>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium border whitespace-nowrap ${locationColour}`}>
                         {location}
-                    </span>
+                      </span>
                     </td>
                     <td className="px-4 py-3">
-                    <button
+                      <button
                         onClick={() => removeSNP(snp.name)}
                         className="text-slate-600 hover:text-red-400 transition-colors text-xs font-mono"
-                    >
+                      >
                         x
-                    </button>
+                      </button>
                     </td>
-                </tr>
+                  </tr>
                 )
-            })}
+              })}
             </tbody>
           </table>
         </div>
