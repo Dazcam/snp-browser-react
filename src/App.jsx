@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react'
 import SearchBar from './SearchBar'
-import SearchTabs from './SearchTabs'
-import BatchSearch from './BatchSearch'
 import GeneTable from './GeneTable'
 import Controls from './Controls'
 import SNPBrowser from './SNPBrowser'
@@ -13,7 +11,6 @@ function App() {
   const [error, setError]         = useState(null)
   const [species, setSpecies]     = useState('homo_sapiens')
   const [build, setBuild]         = useState('GRCh38')
-  const [activeTab, setActiveTab] = useState('single')
   const [appTab, setAppTab]       = useState('genes')
 
   const apiBase = build === 'GRCh37'
@@ -38,35 +35,41 @@ function App() {
     return res.json()
   }
 
-  async function handleBatchFetch(symbols) {
-    setLoading(true)
-    setError(null)
-    const errors = []
-    for (const symbol of symbols) {
-      try {
-        const data = await fetchGene(symbol)
-        setGenes(prev => {
-          if (prev.find(g => g.id === data.id)) return prev
-          return [...prev, data]
-        })
-      } catch (err) {
-        errors.push(err.message)
+  async function fetchGeneBatch(symbols) {
+    const res = await fetch(
+      `${apiBase}/lookup/symbol/${species}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ symbols })
       }
-    }
-    if (errors.length > 0) setError(errors.join(' · '))
-    setLoading(false)
+    )
+    if (!res.ok) throw new Error('Batch request failed')
+    const data = await res.json()
+    return Object.entries(data)
+      .filter(([, info]) => info)
+      .map(([symbol, info]) => ({ ...info, display_name: symbol }))
   }
 
-  useEffect(() => {
-    if (!query) return
-    const timer = setTimeout(async () => {
-      setLoading(true)
-      setError(null)
+  const isMultiple = query.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).length > 1
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!query.trim()) return
+    setLoading(true)
+    setError(null)
+
+    if (isMultiple) {
+      const symbols = query.split(/[\n,]+/).map(s => s.trim()).filter(Boolean)
       try {
-        const data = await fetchGene(query)
+        const results = await fetchGeneBatch(symbols)
         setGenes(prev => {
-          if (prev.find(g => g.id === data.id)) return prev
-          return [...prev, data]
+          const existing = new Set(prev.map(g => g.id))
+          const newOnes = results.filter(r => r.id && !existing.has(r.id))
+          return [...prev, ...newOnes]
         })
         setQuery('')
       } catch (err) {
@@ -74,9 +77,24 @@ function App() {
       } finally {
         setLoading(false)
       }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [query, species, build])
+    } else {
+      const timer = setTimeout(async () => {
+        try {
+          const data = await fetchGene(query.trim())
+          setGenes(prev => {
+            if (prev.find(g => g.id === data.id)) return prev
+            return [...prev, data]
+          })
+          setQuery('')
+        } catch (err) {
+          setError(err.message)
+        } finally {
+          setLoading(false)
+        }
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }
 
   const buildLabel = species === 'homo_sapiens' ? build : 'GRCm39'
 
@@ -112,7 +130,7 @@ function App() {
               Ensembl REST API
             </p>
             <h1 className="text-2xl font-bold text-white">
-              Ensembl Gene Browser
+              Ensembl Gene & SNP Browser
             </h1>
           </div>
           <span className="text-xs text-slate-400 font-mono">
@@ -141,20 +159,6 @@ function App() {
 
         {appTab === 'genes' ? (
           <>
-            <SearchTabs activeTab={activeTab} onTab={setActiveTab} />
-
-            {activeTab === 'single' ? (
-              <SearchBar
-                query={query}
-                onChange={setQuery}
-                loading={loading}
-                error={error}
-                gene={genes.length > 0}
-              />
-            ) : (
-              <BatchSearch onFetch={handleBatchFetch} loading={loading} />
-            )}
-
             <Controls
               species={species}
               onSpecies={handleSpecies}
@@ -162,7 +166,24 @@ function App() {
               onBuild={setBuild}
             />
 
-            <div className="mt-6 mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
+            <form onSubmit={handleSubmit} className="flex gap-2 mt-4 mb-3">
+              <SearchBar
+                query={query}
+                onChange={setQuery}
+                loading={loading}
+                error={error}
+                gene={genes.length > 0}
+              />
+              <button
+                type="submit"
+                disabled={loading || !query.trim()}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-mono transition-colors whitespace-nowrap"
+              >
+                {loading ? 'Fetching...' : isMultiple ? 'Fetch all' : 'Look up'}
+              </button>
+            </form>
+
+            <div className="mb-4 flex items-center gap-3 text-xs font-mono text-slate-400">
               {genes.length > 0 && (
                 <>
                   <span className="text-emerald-400">●</span>
