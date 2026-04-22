@@ -34,7 +34,7 @@ function GeneTable({ genes, onRemove }) {
               <td className="px-4 py-3 text-slate-300">{gene.strand === 1 ? '+' : '-'}</td>
               <td className="px-4 py-3">
                 <span className="rounded-full bg-emerald-900/40 px-2 py-1 text-xs font-medium text-emerald-400 border border-emerald-800">
-                  {gene.biotype}
+                  {gene.biotype?.replace(/_/g, ' ')}
                 </span>
               </td>
               <td className="px-4 py-3">
