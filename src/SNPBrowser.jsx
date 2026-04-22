@@ -31,6 +31,15 @@ function SNPBrowser({ species }) {
     return Object.entries(data).map(([name, info]) => ({ ...info, name }))
   }
 
+  async function handleSubmit(e) {
+    e.preventDefault()
+        if (isMultiple) {
+            await handleBatch(e)
+        } else {
+            await handleSearch(e)
+        }
+}
+
   async function handleSearch(e) {
     e.preventDefault()
     if (!query.trim()) return
@@ -126,11 +135,12 @@ function SNPBrowser({ species }) {
     URL.revokeObjectURL(url)
   }
 
+  const isMultiple = query.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).length > 1
   const mapping = snps.length > 0 ? snps[0].mappings?.[0] : null
 
   return (
     <div>
-      <form onSubmit={handleSearch} className="flex gap-2 mb-3">
+      <form onSubmit={handleSubmit} className="flex gap-2 mb-3">
         <input
           type="text"
           value={query}
@@ -139,19 +149,11 @@ function SNPBrowser({ species }) {
           className="w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-3 text-sm text-slate-100 placeholder-slate-500 font-mono focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
         />
         <button
-          type="submit"
-          disabled={loading || !query.trim()}
-          className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-mono transition-colors whitespace-nowrap"
+        type="submit"
+        disabled={loading || !query.trim()}
+        className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-mono transition-colors whitespace-nowrap"
         >
-          {loading ? 'Fetching...' : 'Look up'}
-        </button>
-        <button
-          type="button"
-          onClick={handleBatch}
-          disabled={loading || !query.trim()}
-          className="px-4 py-2 rounded-lg border border-slate-600 hover:border-slate-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-400 text-xs font-mono transition-colors whitespace-nowrap"
-        >
-          Batch
+        {loading ? 'Fetching...' : isMultiple ? 'Fetch all' : 'Look up'}
         </button>
       </form>
 
