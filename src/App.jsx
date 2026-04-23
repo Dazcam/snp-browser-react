@@ -27,11 +27,13 @@ function App() {
     setGenes(prev => prev.filter(g => g.id !== id))
   }
 
-  async function fetchGene(symbol) {
-    const res = await fetch(
-      `${apiBase}/lookup/symbol/${species}/${symbol}?content-type=application/json`
-    )
-    if (!res.ok) throw new Error(`"${symbol}" not found`)
+  async function fetchGene(input) {
+    const isEnsemblId = /^ENS(MUS)?G\d+/.test(input.trim())
+    const url = isEnsemblId
+      ? `${apiBase}/lookup/id/${input.trim()}?content-type=application/json`
+      : `${apiBase}/lookup/symbol/${species}/${input.trim()}?content-type=application/json`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`"${input}" not found`)
     return res.json()
   }
 

@@ -140,6 +140,12 @@ function SNPBrowser({ species }) {
 
   return (
     <div>
+      {species === 'mus_musculus' && (
+        <div className="rounded-md bg-amber-900/30 border border-amber-700 px-4 py-3 text-xs text-amber-400 font-mono mb-4">
+          Note: rsID coverage for Mus musculus is limited compared to Homo sapiens.
+          Some variants may not be found.
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="flex gap-2 mb-3">
         <input
           type="text"
